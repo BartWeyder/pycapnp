@@ -4059,7 +4059,8 @@ cdef class _MultipleBytesPackedMessageReader:
     def __iter__(self):
         return self
 
-cdef class UniversalBytesPackedMessageReader:
+
+cdef class MultipleBytesPackedAnyMessageReader:
     cdef schema_cpp.ArrayInputStream * stream
     cdef schema_cpp.BufferedInputStream * buffered_stream
     cdef Py_buffer view
@@ -4082,16 +4083,20 @@ cdef class UniversalBytesPackedMessageReader:
         del self.buffered_stream
         del self.stream
 
-    def read(self, schema):
+    def __next__(self):
         try:
             reader = _PackedMessageReader()._init(
                 deref(self.buffered_stream), self.traversal_limit_in_words, self.nesting_limit, self)
-            return reader.get_root(schema)
+            return reader.get_root_as_any()
         except KjException as e:
             if 'EOF' in str(e):
                 raise StopIteration
             else:
                 raise
+
+    def __iter__(self):
+        return self
+
 
 @cython.internal
 cdef class _AlignedBuffer:
