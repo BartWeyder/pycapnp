@@ -4086,6 +4086,44 @@ cdef class _MultipleBytesPackedMessageReader:
         return self
 
 
+cdef class MultipleBytesPackedAnyMessageReader:
+    cdef schema_cpp.ArrayInputStream * stream
+    cdef schema_cpp.BufferedInputStream * buffered_stream
+    cdef Py_buffer view
+
+    cdef public object traversal_limit_in_words, nesting_limit, schema, buf
+
+    def __init__(self, buf, traversal_limit_in_words=None, nesting_limit=None):
+        self.traversal_limit_in_words = traversal_limit_in_words
+        self.nesting_limit = nesting_limit
+
+        if PyObject_GetBuffer(buf, &self.view, PyBUF_SIMPLE) != 0:
+            raise KjException("could not get read buffer")
+
+        self.buf = buf
+        self.stream = new schema_cpp.ArrayInputStream(schema_cpp.ByteArrayPtr(<byte *>self.view.buf, self.view.len))
+        self.buffered_stream = new schema_cpp.BufferedInputStreamWrapper(deref(self.stream))
+
+    def __dealloc__(self):
+        PyBuffer_Release(&self.view)
+        del self.buffered_stream
+        del self.stream
+
+    def __next__(self):
+        try:
+            reader = _PackedMessageReader()._init(
+                deref(self.buffered_stream), self.traversal_limit_in_words, self.nesting_limit, self)
+            return reader.get_root_as_any()
+        except KjException as e:
+            if 'EOF' in str(e):
+                raise StopIteration
+            else:
+                raise
+
+    def __iter__(self):
+        return self
+
+
 @cython.internal
 cdef class _AlignedBuffer:
     cdef char * buf
